@@ -1,0 +1,159 @@
+CUSTOM_CSS = """
+
+<style>
+
+.block-container { max-width: 800px; margin:auto; padding:2rem; }
+
+h1 { color: #2E7D32; }
+
+button { background:#2E7D32; color:white; border-radius:8px; padding:0.5rem 1rem;}
+
+button:hover { background:#1B5E20; }
+
+.tip-card { border:1px solid #2E7D32; padding:1rem; border-radius:8px; margin:1rem 0; }
+
+.error { color: red; font-weight: bold; }
+
+</style>
+
+"""
+
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+st.title("🌱 Sustainable Smart City Assistant")
+
+ 
+
+def safe_request(endpoint, data=None, files=None):
+
+    try:
+
+        resp = requests.post(f"http://localhost:8000{endpoint}", data=data, files=files, timeout=30)
+
+        resp.raise_for_status()
+
+        return resp.json(), None
+
+    except requests.HTTPError as e:
+
+        return None, f"HTTP error {e.response.status_code}: {e.response.text}"
+
+    except ValueError:
+
+        return None, f"Invalid JSON response:\n{resp.text}"
+
+    except Exception as e:
+
+        return None, f"Request failed: {e}"
+
+ 
+
+def run_ui():
+
+    module = st.sidebar.selectbox("Module", ["Summarize", "Forecast", "Anomaly", "Eco-Tips", "Chat"])
+
+ 
+
+    if module == "Summarize":
+
+        txt = st.text_area("Paste text to summarize")
+
+        if st.button("Summarize"):
+
+            data, err = safe_request("/summarize", data={"text": txt})
+
+            if err:
+
+                st.error(err)
+
+            else:
+
+                st.write(data["summary"])
+
+ 
+
+    elif module == "Forecast":
+
+        file = st.file_uploader("Upload KPI CSV (must have 'value' column)")
+
+        if file and st.button("Run Forecast"):
+
+            data, err = safe_request("/forecast", files={"csv": file})
+
+            if err:
+
+                st.error(err)
+
+            elif "error" in data:
+
+                st.error(data["error"])
+
+            else:
+
+                st.line_chart(data["forecast"])
+
+ 
+
+    elif module == "Anomaly":
+
+        vals = st.text_input("Comma-separated numbers")
+
+        if st.button("Detect"):
+
+            data, err = safe_request("/anomaly", data={"values": vals})
+
+            if err:
+
+                st.error(err)
+
+            elif "error" in data:
+
+                st.error(data["error"])
+
+            else:
+
+                st.write("Anomaly indices:", data["anomalies"])
+
+ 
+
+    elif module == "Eco-Tips":
+
+        kw = st.text_input("Eco keyword")
+
+        if st.button("Get Tip"):
+
+            data, err = safe_request("/chat", data={"query": f"Give eco-friendly tip about {kw}"})
+
+            if err:
+
+                st.error(err)
+
+            else:
+
+                comp.html(f'<div class="tip-card"><p>{data["reply"]}</p></div>', height=150)
+
+ 
+
+    elif module == "Chat":
+
+        q = st.text_input("Ask anything")
+
+        if st.button("Send"):
+
+            data, err = safe_request("/chat", data={"query": q})
+
+            if err:
+
+                st.error(err)
+
+            else:
+
+                st.write(data["reply"])
+
+ 
+
+if _name_ == "_main_":
+
+    threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=8000), daemon=True).start()
+
+    run_ui()
